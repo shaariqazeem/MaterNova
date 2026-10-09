@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const navItems = [
   {
@@ -33,6 +35,46 @@ export default function Sidebar() {
 
   const [showLogout, setShowLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [userName, setUserName] = useState("Your account");
+
+  useEffect(() => {
+    try {
+      for (const key of ["maternovaProfile", "maternovaSignup"]) {
+        const saved = localStorage.getItem(key);
+        if (!saved) continue;
+
+        const profile = JSON.parse(saved);
+        const name =
+          profile.fullName ||
+          profile.name ||
+          profile.displayName;
+
+        if (typeof name === "string" && name.trim()) {
+          setUserName(name.trim());
+          break;
+        }
+      }
+    } catch {
+      // Fall back to the signed-in Firebase account.
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user?.displayName?.trim()) {
+        setUserName(user.displayName.trim());
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const firstName = userName.trim().split(/\s+/)[0] || "User";
+  const initials = userName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
 
   function handleLogout() {
     setLoggingOut(true);
@@ -263,8 +305,7 @@ export default function Sidebar() {
 
             <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#f8c4d2] to-[#e889a5] text-sm font-bold text-white shadow-sm">
 
-              AS
-
+              {initials}
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-[#67a786]" />
 
             </div>
@@ -275,7 +316,7 @@ export default function Sidebar() {
             <div className="min-w-0 flex-1">
 
               <p className="truncate text-sm font-bold text-[#172b4d]">
-                Ananya
+                {firstName}
               </p>
 
               <p className="text-xs text-[#8994a8]">

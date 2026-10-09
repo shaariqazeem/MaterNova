@@ -157,7 +157,7 @@ export default function Sidebar() {
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold text-[#172b4d]">Ananya</p>
+              <p className="truncate text-sm font-bold text-[#172b4d]">Shaariq</p>
               <p className="text-xs text-[#8994a8]">Pregnancy journey</p>
             </div>
 

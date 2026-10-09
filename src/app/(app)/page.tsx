@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import {
@@ -71,7 +71,7 @@ export default function DashboardPage() {
               <span className="hidden text-[#3B5B88] sm:inline">126 {t("daysLeft")}</span>
             </div>
             <h1 className="font-serif text-3xl font-medium tracking-tight text-[#172A46] sm:text-[36px]">
-              {t("goodMorning")}, Ananya
+              {t("goodMorning")}, Shaariq
             </h1>
           </div>
 
