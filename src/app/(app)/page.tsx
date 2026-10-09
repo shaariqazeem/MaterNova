@@ -1,4 +1,6 @@
-﻿import Link from "next/link";
+﻿"use client";
+
+import Link from "next/link";
 import {
   ArrowRight,
   Bell,
@@ -14,8 +16,12 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Trophy,
   Utensils,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { useLanguage } from "@/lib/i18n";
 
 const nutrition = [
   { label: "Calories", value: "1,480", target: "2,100 kcal", percent: 70, left: "620 kcal left", icon: Flame, tone: "rose" },
@@ -35,40 +41,55 @@ const week = [
 ];
 
 export default function DashboardPage() {
+  const { t } = useLanguage();
+  const [exerciseMinutes, setExerciseMinutes] = useState(90);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("maternova-exercise-logs");
+      if (!stored) return;
+      const logs = JSON.parse(stored);
+      if (Array.isArray(logs)) {
+        const total = logs.reduce((sum: number, item: { duration?: number }) => sum + (Number(item.duration) || 0), 0);
+        setExerciseMinutes(total);
+      }
+    } catch {
+      // ignore malformed local storage values
+    }
+  }, []);
+
   return (
     <main className="min-h-screen bg-[#F8FAFD] text-[#1E293B]">
       <div className="mx-auto max-w-[1440px] px-4 pb-16 pt-8 sm:px-6 lg:px-10 lg:pt-10">
-        {/* Header */}
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]">
-              <span>Today</span>
+              <span>{t("today")}</span>
               <span className="h-1 w-1 rounded-full bg-[#CBD5E1]" />
               <span>Wednesday, October 23</span>
               <span className="hidden sm:inline">•</span>
-              <span className="hidden text-[#3B5B88] sm:inline">126 days to estimated due date</span>
+              <span className="hidden text-[#3B5B88] sm:inline">126 {t("daysLeft")}</span>
             </div>
             <h1 className="font-serif text-3xl font-medium tracking-tight text-[#172A46] sm:text-[36px]">
-              Good morning, Ananya
+              {t("goodMorning")}, Ananya
             </h1>
           </div>
 
           <div className="flex items-center gap-2">
             <button className="hidden items-center gap-2 rounded-full border border-[#DCE3EC] bg-white px-4 py-2 text-sm font-semibold text-[#34445A] shadow-sm sm:flex">
               <span className="h-2 w-2 rounded-full bg-[#D9778F]" />
-              Dr. Meenakshi&apos;s Care Sync
+              {t("careSync")}
             </button>
             <button aria-label="Notifications" className="rounded-full border border-[#DCE3EC] bg-white p-2.5 text-[#475569] shadow-sm">
               <Bell className="h-4 w-4" />
             </button>
             <button className="flex items-center gap-2 rounded-full bg-[#203A63] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_18px_rgba(32,58,99,.2)] transition hover:bg-[#172D4C]">
               <Mic className="h-4 w-4" />
-              <span className="hidden sm:inline">Ask Maternova</span>
+              <span className="hidden sm:inline">{t("askMaternova")}</span>
             </button>
           </div>
         </header>
 
-        {/* Pregnancy hero */}
         <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#172A46] via-[#203A63] to-[#2B4B79] text-white shadow-[0_18px_45px_rgba(32,58,99,.16)]">
           <div className="absolute -right-20 -top-24 h-80 w-80 rounded-full bg-[#D9778F]/20 blur-3xl" />
           <div className="absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-[#6E91C9]/15 blur-3xl" />
@@ -128,12 +149,11 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Nutrition */}
         <section className="mt-10">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="h-6 w-1.5 rounded-full bg-[#203A63]" />
-              <h2 className="font-serif text-2xl font-medium text-[#172A46]">Today&apos;s Nutrition Breakdown</h2>
+              <h2 className="font-serif text-2xl font-medium text-[#172A46]">{t("todaysNutrition")}</h2>
             </div>
             <div className="flex gap-4 text-xs font-semibold text-[#64748B]">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#203A63]" />Optimal intake</span>
@@ -170,7 +190,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* Lower dashboard grid */}
         <section className="mt-10 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
           <div className="rounded-2xl border border-[#E5EAF0] bg-white p-6 shadow-[0_4px_20px_rgba(32,58,99,.04)]">
             <div className="flex items-start justify-between">
@@ -194,18 +213,17 @@ export default function DashboardPage() {
 
           <div className="rounded-2xl border border-[#F0D9DF] bg-[#FFF9FA] p-6 shadow-[0_4px_20px_rgba(217,119,143,.05)]">
             <div className="flex items-center gap-2 text-[#A84D68]">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-bold uppercase tracking-[0.13em]">Maternova insight</span>
+              <Trophy className="h-4 w-4" />
+              <span className="text-xs font-bold uppercase tracking-[0.13em]">{t("exerciseTracker")}</span>
             </div>
-            <h3 className="mt-3 font-serif text-2xl leading-tight text-[#172A46]">A little consistency goes a long way.</h3>
-            <p className="mt-3 text-sm leading-6 text-[#59677A]">You&apos;re doing well with protein today. For your next meal, consider pairing a fiber-rich food with your usual protein source.</p>
-            <Link href="/nutrition" className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#203A63] px-4 py-2.5 text-xs font-bold text-white shadow-sm">
-              Review nutrition <ChevronRight className="h-4 w-4" />
+            <h3 className="mt-3 font-serif text-2xl leading-tight text-[#172A46]">{exerciseMinutes} minutes this week</h3>
+            <p className="mt-3 text-sm leading-6 text-[#59677A]">You are close to your prenatal movement goal. Keep your routine gentle and consistent.</p>
+            <Link href="/exercise" className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#203A63] px-4 py-2.5 text-xs font-bold text-white shadow-sm">
+              Open exercise log <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
         </section>
 
-        {/* Guidance + quick actions */}
         <section className="mt-10 grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
           <div className="rounded-2xl border border-[#E5EAF0] bg-white p-6 shadow-[0_4px_20px_rgba(32,58,99,.04)]">
             <div className="flex items-center justify-between">
@@ -216,11 +234,11 @@ export default function DashboardPage() {
               <Link href="/doctor" className="text-xs font-bold text-[#31527D]">Open guidance</Link>
             </div>
             <div className="mt-5 space-y-3">
-              {[
+              {([
                 "Take your prescribed supplement as directed by your healthcare professional.",
                 "Include a protein-rich food in your next meal.",
                 "Keep water nearby and stay hydrated throughout the day.",
-              ].map((text, i) => (
+              ]).map((text, i) => (
                 <div key={text} className="flex gap-3 rounded-xl bg-[#F7F9FC] p-4">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EFF4FA] text-xs font-bold text-[#203A63]">{i + 1}</span>
                   <p className="text-sm leading-6 text-[#46566B]">{text}</p>

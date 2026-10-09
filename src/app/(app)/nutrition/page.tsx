@@ -15,6 +15,7 @@ import {
   Coffee,
   Sun,
   Moon,
+  Search,
 } from "lucide-react";
 
 type Meal = {
@@ -65,13 +66,11 @@ const fatTarget = 70;
 export default function NutritionPage() {
   const [meals, setMeals] = useState<Meal[]>(initialMeals);
   const [showAddMeal, setShowAddMeal] = useState(false);
-
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mealType, setMealType] = useState("Dinner");
   const [mealName, setMealName] = useState("");
-  const [mealCalories, setMealCalories] = useState("");
-  const [mealProtein, setMealProtein] = useState("");
-  const [mealCarbs, setMealCarbs] = useState("");
-  const [mealFat, setMealFat] = useState("");
+  const [mealSuggestions, setMealSuggestions] = useState<string[]>([]);
+  const [analysisText, setAnalysisText] = useState("");
 
   const totals = useMemo(() => {
     return meals.reduce(
@@ -81,82 +80,104 @@ export default function NutritionPage() {
         carbs: total.carbs + meal.carbs,
         fat: total.fat + meal.fat,
       }),
-      {
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+  }, [meals]);
+
+  const calorieProgress = Math.min((totals.calories / calorieTarget) * 100, 100);
+  const proteinProgress = Math.min((totals.protein / proteinTarget) * 100, 100);
+  const carbsProgress = Math.min((totals.carbs / carbsTarget) * 100, 100);
+  const fatProgress = Math.min((totals.fat / fatTarget) * 100, 100);
+
+  function getMealIcon(type: string) {
+    if (type === "Breakfast") return <Coffee className="h-5 w-5" />;
+    if (type === "Morning Snack" || type === "Evening Snack") return <Apple className="h-5 w-5" />;
+    if (type === "Lunch") return <Sun className="h-5 w-5" />;
+    return <Moon className="h-5 w-5" />;
+  }
+
+  function handleMealInputChange(value: string) {
+    setMealName(value);
+    if (!value.trim()) {
+      setMealSuggestions([]);
+      return;
+    }
+
+    fetch("/api/nutrition/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mealName: value }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data?.suggestions)) {
+          setMealSuggestions(data.suggestions);
+        }
+      })
+      .catch(() => {
+        setMealSuggestions([]);
+      });
+  }
+
+  async function addMeal() {
+    if (!mealName.trim()) return;
+
+    setIsAnalyzing(true);
+
+    try {
+      const response = await fetch("/api/nutrition/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mealName, description: mealName }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to analyze meal.");
+      }
+
+      const evaluatedMeal = data?.meal;
+
+      const newMeal: Meal = {
+        id: Date.now(),
+        type: mealType,
+        name: evaluatedMeal?.name || mealName,
+        calories: Number(evaluatedMeal?.calories ?? 0),
+        protein: Number(evaluatedMeal?.protein ?? 0),
+        carbs: Number(evaluatedMeal?.carbs ?? 0),
+        fat: Number(evaluatedMeal?.fat ?? 0),
+      };
+
+      setMeals((currentMeals) => [...currentMeals, newMeal]);
+      setAnalysisText(evaluatedMeal?.summary || "Meal added successfully.");
+    } catch (error) {
+      const fallbackMeal: Meal = {
+        id: Date.now(),
+        type: mealType,
+        name: mealName,
         calories: 0,
         protein: 0,
         carbs: 0,
         fat: 0,
-      }
-    );
-  }, [meals]);
+      };
 
-  const calorieProgress = Math.min(
-    (totals.calories / calorieTarget) * 100,
-    100
-  );
-
-  const proteinProgress = Math.min(
-    (totals.protein / proteinTarget) * 100,
-    100
-  );
-
-  const carbsProgress = Math.min(
-    (totals.carbs / carbsTarget) * 100,
-    100
-  );
-
-  const fatProgress = Math.min(
-    (totals.fat / fatTarget) * 100,
-    100
-  );
-
-  function getMealIcon(type: string) {
-    if (type === "Breakfast") {
-      return <Coffee className="h-5 w-5" />;
+      setMeals((currentMeals) => [...currentMeals, fallbackMeal]);
+      setAnalysisText(
+        error instanceof Error ? error.message : "Meal added with estimated values."
+      );
+    } finally {
+      setIsAnalyzing(false);
+      setMealName("");
+      setMealSuggestions([]);
+      setMealType("Dinner");
+      setShowAddMeal(false);
     }
-
-    if (type === "Morning Snack" || type === "Evening Snack") {
-      return <Apple className="h-5 w-5" />;
-    }
-
-    if (type === "Lunch") {
-      return <Sun className="h-5 w-5" />;
-    }
-
-    return <Moon className="h-5 w-5" />;
-  }
-
-  function addMeal() {
-    if (!mealName.trim()) {
-      return;
-    }
-
-    const newMeal: Meal = {
-      id: Date.now(),
-      type: mealType,
-      name: mealName,
-      calories: Number(mealCalories) || 0,
-      protein: Number(mealProtein) || 0,
-      carbs: Number(mealCarbs) || 0,
-      fat: Number(mealFat) || 0,
-    };
-
-    setMeals((currentMeals) => [...currentMeals, newMeal]);
-
-    setMealName("");
-    setMealCalories("");
-    setMealProtein("");
-    setMealCarbs("");
-    setMealFat("");
-    setMealType("Dinner");
-    setShowAddMeal(false);
   }
 
   return (
     <main className="min-h-screen bg-[#f7f8fc] px-6 py-8 text-[#172b4d] md:px-10 lg:px-12">
       <div className="mx-auto max-w-[1180px]">
-
-        {/* HEADER */}
         <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#c95d7d]">
@@ -183,10 +204,8 @@ export default function NutritionPage() {
           </button>
         </div>
 
-        {/* DAILY SUMMARY */}
         <section className="mb-7 rounded-[28px] bg-gradient-to-br from-[#172b4d] via-[#1e3a63] to-[#293e6b] p-7 text-white shadow-[0_16px_45px_rgba(23,43,77,0.12)] md:p-9">
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-
             <div>
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#f09ab1]">
                 <Sparkles className="h-4 w-4" />
@@ -198,26 +217,22 @@ export default function NutritionPage() {
               </h2>
 
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[#d8e0ee]">
-                Keep logging what you eat so Maternova can help you
-                understand your nutrition patterns and progress.
+                Keep logging what you eat so Maternova can help you understand your nutrition patterns and progress.
               </p>
 
               <div className="mt-7 flex flex-wrap gap-3">
                 <div className="rounded-full bg-white/10 px-4 py-2 text-xs font-medium text-[#eef2f8]">
                   {meals.length} meals logged
                 </div>
-
                 <div className="rounded-full bg-white/10 px-4 py-2 text-xs font-medium text-[#eef2f8]">
                   {Math.max(calorieTarget - totals.calories, 0)} kcal remaining
                 </div>
-
                 <div className="rounded-full bg-[#d97896]/20 px-4 py-2 text-xs font-medium text-[#f5b5c5]">
                   {Math.max(proteinTarget - totals.protein, 0)}g protein remaining
                 </div>
               </div>
             </div>
 
-            {/* CALORIE RING */}
             <div className="flex items-center justify-center lg:justify-end">
               <div className="relative flex h-48 w-48 items-center justify-center rounded-full border-[14px] border-white/10">
                 <div
@@ -235,11 +250,9 @@ export default function NutritionPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#b9c6d9]">
                     Calories
                   </p>
-
                   <p className="mt-1 text-4xl font-semibold">
                     {totals.calories.toLocaleString()}
                   </p>
-
                   <p className="mt-1 text-xs text-[#b9c6d9]">
                     of {calorieTarget.toLocaleString()} kcal
                   </p>
@@ -249,63 +262,24 @@ export default function NutritionPage() {
           </div>
         </section>
 
-        {/* NUTRITION CARDS */}
         <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-          <NutritionCard
-            icon={<Flame className="h-5 w-5" />}
-            label="Calories"
-            value={totals.calories.toLocaleString()}
-            target={`${calorieTarget.toLocaleString()} kcal`}
-            progress={calorieProgress}
-            accent="rose"
-          />
-
-          <NutritionCard
-            icon={<Target className="h-5 w-5" />}
-            label="Protein"
-            value={`${totals.protein}g`}
-            target={`${proteinTarget}g`}
-            progress={proteinProgress}
-            accent="navy"
-          />
-
-          <NutritionCard
-            icon={<TrendingUp className="h-5 w-5" />}
-            label="Carbohydrates"
-            value={`${totals.carbs}g`}
-            target={`${carbsTarget}g`}
-            progress={carbsProgress}
-            accent="rose"
-          />
-
-          <NutritionCard
-            icon={<Utensils className="h-5 w-5" />}
-            label="Fat"
-            value={`${totals.fat}g`}
-            target={`${fatTarget}g`}
-            progress={fatProgress}
-            accent="navy"
-          />
+          <NutritionCard icon={<Flame className="h-5 w-5" />} label="Calories" value={totals.calories.toLocaleString()} target={`${calorieTarget.toLocaleString()} kcal`} progress={calorieProgress} accent="rose" />
+          <NutritionCard icon={<Target className="h-5 w-5" />} label="Protein" value={`${totals.protein}g`} target={`${proteinTarget}g`} progress={proteinProgress} accent="navy" />
+          <NutritionCard icon={<TrendingUp className="h-5 w-5" />} label="Carbohydrates" value={`${totals.carbs}g`} target={`${carbsTarget}g`} progress={carbsProgress} accent="rose" />
+          <NutritionCard icon={<Utensils className="h-5 w-5" />} label="Fat" value={`${totals.fat}g`} target={`${fatTarget}g`} progress={fatProgress} accent="navy" />
         </section>
 
-        {/* MAIN CONTENT */}
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-
-          {/* MEALS */}
           <section className="rounded-[26px] border border-[#e3e7ee] bg-white p-6 shadow-sm md:p-8">
-
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="font-serif text-2xl font-medium text-[#172b4d]">
                   Today&apos;s meals
                 </h2>
-
                 <p className="mt-1 text-sm text-[#8390a5]">
                   Your recorded food intake
                 </p>
               </div>
-
               <span className="rounded-full bg-[#fbeaf0] px-3 py-1.5 text-xs font-semibold text-[#b94f6d]">
                 {meals.length} logged
               </span>
@@ -313,60 +287,39 @@ export default function NutritionPage() {
 
             <div className="space-y-3">
               {meals.map((meal) => (
-                <div
-                  key={meal.id}
-                  className="group rounded-2xl border border-[#e7eaf0] bg-[#fbfcfe] p-4 transition hover:border-[#e0b8c5] hover:bg-[#fffafb]"
-                >
+                <div key={meal.id} className="group rounded-2xl border border-[#e7eaf0] bg-[#fbfcfe] p-4 transition hover:border-[#e0b8c5] hover:bg-[#fffafb]">
                   <div className="flex items-center gap-4">
-
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef2f8] text-[#29476f] transition group-hover:bg-[#fbeaf0] group-hover:text-[#c95d7d]">
                       {getMealIcon(meal.type)}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-[#172b4d]">
-                          {meal.type}
-                        </h3>
-
+                        <h3 className="font-semibold text-[#172b4d]">{meal.type}</h3>
                         <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#8994a8]">
                           {meal.calories} kcal
                         </span>
                       </div>
 
-                      <p className="mt-1 truncate text-sm text-[#66758f]">
-                        {meal.name}
-                      </p>
+                      <p className="mt-1 truncate text-sm text-[#66758f]">{meal.name}</p>
                     </div>
 
                     <div className="hidden text-right sm:block">
-                      <p className="text-sm font-semibold text-[#29476f]">
-                        {meal.protein}g protein
-                      </p>
-
-                      <p className="mt-1 text-xs text-[#8994a8]">
-                        {meal.carbs}g carbs · {meal.fat}g fat
-                      </p>
+                      <p className="text-sm font-semibold text-[#29476f]">{meal.protein}g protein</p>
+                      <p className="mt-1 text-xs text-[#8994a8]">{meal.carbs}g carbs · {meal.fat}g fat</p>
                     </div>
-
                   </div>
                 </div>
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowAddMeal(true)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#d8dee8] py-4 text-sm font-semibold text-[#52627c] transition hover:border-[#d97896] hover:bg-[#fff9fb] hover:text-[#b94f6d]"
-            >
+            <button type="button" onClick={() => setShowAddMeal(true)} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#d8dee8] py-4 text-sm font-semibold text-[#52627c] transition hover:border-[#d97896] hover:bg-[#fff9fb] hover:text-[#b94f6d]">
               <Plus className="h-4 w-4" />
               Add another meal
             </button>
           </section>
 
-          {/* INSIGHT */}
           <section className="overflow-hidden rounded-[26px] bg-gradient-to-b from-[#172b4d] to-[#243e66] p-7 text-white shadow-[0_16px_40px_rgba(23,43,77,0.12)]">
-
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
               <Sparkles className="h-5 w-5 text-[#e486a0]" />
             </div>
@@ -376,53 +329,33 @@ export default function NutritionPage() {
             </p>
 
             <h2 className="mt-3 font-serif text-3xl font-medium leading-tight">
-              {totals.protein >= proteinTarget
-                ? "Great protein progress today."
-                : "You can still strengthen your protein intake."}
+              {totals.protein >= proteinTarget ? "Great protein progress today." : "You can still strengthen your protein intake."}
             </h2>
 
             <p className="mt-4 text-sm leading-7 text-[#d6dfec]">
               {totals.protein >= proteinTarget
                 ? "You have reached your current protein target. Continue following the nutrition guidance provided by your healthcare professional."
-                : `You have ${Math.max(
-                    proteinTarget - totals.protein,
-                    0
-                  )}g of your current protein target remaining.`}
+                : `You have ${Math.max(proteinTarget - totals.protein, 0)}g of your current protein target remaining.`}
             </p>
 
             <div className="mt-7 rounded-2xl bg-white/10 p-5">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-[#d8e0ee]">
-                  Protein progress
-                </span>
-
-                <span className="text-sm font-semibold text-[#f1a0b7]">
-                  {Math.round(proteinProgress)}%
-                </span>
+                <span className="text-sm text-[#d8e0ee]">Protein progress</span>
+                <span className="text-sm font-semibold text-[#f1a0b7]">{Math.round(proteinProgress)}%</span>
               </div>
 
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-[#df7897] transition-all"
-                  style={{
-                    width: `${proteinProgress}%`,
-                  }}
-                />
+                <div className="h-full rounded-full bg-[#df7897] transition-all" style={{ width: `${proteinProgress}%` }} />
               </div>
             </div>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-5">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-[#e486a0]" />
-
                 <div>
-                  <p className="text-sm font-semibold">
-                    Keep logging consistently
-                  </p>
-
+                  <p className="text-sm font-semibold">Keep logging consistently</p>
                   <p className="mt-1 text-xs leading-5 text-[#b9c6d9]">
-                    Your meal history helps Maternova show meaningful
-                    patterns in Insights.
+                    Your meal history helps Maternova show meaningful patterns in Insights.
                   </p>
                 </div>
               </div>
@@ -430,102 +363,50 @@ export default function NutritionPage() {
           </section>
         </div>
 
-        {/* BOTTOM INFORMATION */}
         <section className="mt-6 grid gap-4 md:grid-cols-3">
-
-          <SmallInfoCard
-            title="Meals logged"
-            value={`${meals.length}`}
-            subtitle="Today"
-            icon={<Utensils className="h-5 w-5" />}
-          />
-
-          <SmallInfoCard
-            title="Calories remaining"
-            value={`${Math.max(
-              calorieTarget - totals.calories,
-              0
-            )}`}
-            subtitle="kcal in today's target"
-            icon={<Flame className="h-5 w-5" />}
-          />
-
-          <SmallInfoCard
-            title="Last meal"
-            value={meals[meals.length - 1]?.type || "None"}
-            subtitle={meals[meals.length - 1]?.name || "No meal logged"}
-            icon={<Clock3 className="h-5 w-5" />}
-          />
-
+          <SmallInfoCard title="Meals logged" value={`${meals.length}`} subtitle="Today" icon={<Utensils className="h-5 w-5" />} />
+          <SmallInfoCard title="Calories remaining" value={`${Math.max(calorieTarget - totals.calories, 0)}`} subtitle="kcal in today's target" icon={<Flame className="h-5 w-5" />} />
+          <SmallInfoCard title="Last meal" value={meals[meals.length - 1]?.type || "None"} subtitle={meals[meals.length - 1]?.name || "No meal logged"} icon={<Clock3 className="h-5 w-5" />} />
         </section>
 
-        {/* SAFETY */}
         <section className="mt-6 rounded-[20px] border border-[#e7dfe3] bg-[#fffafb] p-5">
           <div className="flex items-start gap-3">
             <ShieldIcon />
-
             <div>
-              <p className="text-sm font-semibold text-[#172b4d]">
-                Nutrition guidance
-              </p>
-
+              <p className="text-sm font-semibold text-[#172b4d]">Nutrition guidance</p>
               <p className="mt-1 text-xs leading-6 text-[#748198]">
-                Maternova helps you record and understand your food
-                intake. Nutrition targets shown in this prototype are
-                illustrative and should not replace individualized
-                guidance from your healthcare professional.
+                Maternova helps you record and understand your food intake. Nutrition targets shown in this prototype are illustrative and should not replace individualized guidance from your healthcare professional.
               </p>
             </div>
           </div>
         </section>
       </div>
 
-      {/* ADD MEAL MODAL */}
       {showAddMeal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#172b4d]/50 p-5 backdrop-blur-sm">
-
           <div className="w-full max-w-lg rounded-[28px] border border-[#e2e6ee] bg-white p-6 shadow-2xl md:p-8">
-
             <div className="flex items-start justify-between">
-
               <div>
                 <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-[#fbeaf0] text-[#c95d7d]">
                   <Plus className="h-5 w-5" />
                 </div>
-
-                <h2 className="font-serif text-3xl font-medium text-[#172b4d]">
-                  Add a meal
-                </h2>
-
+                <h2 className="font-serif text-3xl font-medium text-[#172b4d]">Add a meal</h2>
                 <p className="mt-2 text-sm text-[#718099]">
                   Add the nutrition information from your meal.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowAddMeal(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5f6f8] text-[#66758f] transition hover:bg-[#fbeaf0] hover:text-[#c95d7d]"
-              >
+              <button type="button" onClick={() => setShowAddMeal(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f5f6f8] text-[#66758f] transition hover:bg-[#fbeaf0] hover:text-[#c95d7d]">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="mt-7 space-y-4">
-
-              {/* MEAL TYPE */}
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#718099]">
                   Meal type
                 </label>
-
-                <select
-                  value={mealType}
-                  onChange={(event) =>
-                    setMealType(event.target.value)
-                  }
-                  className="w-full rounded-xl border border-[#dfe4ec] bg-[#fafbfc] px-4 py-3 text-sm text-[#172b4d] outline-none transition focus:border-[#d97896] focus:ring-2 focus:ring-[#d97896]/10"
-                >
+                <select value={mealType} onChange={(event) => setMealType(event.target.value)} className="w-full rounded-xl border border-[#dfe4ec] bg-[#fafbfc] px-4 py-3 text-sm text-[#172b4d] outline-none transition focus:border-[#d97896] focus:ring-2 focus:ring-[#d97896]/10">
                   <option>Breakfast</option>
                   <option>Morning Snack</option>
                   <option>Lunch</option>
@@ -534,65 +415,35 @@ export default function NutritionPage() {
                 </select>
               </div>
 
-              {/* MEAL NAME */}
               <div>
                 <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#718099]">
                   What did you eat?
                 </label>
-
-                <input
-                  value={mealName}
-                  onChange={(event) =>
-                    setMealName(event.target.value)
-                  }
-                  placeholder="Example: Chapati + Paneer + Salad"
-                  className="w-full rounded-xl border border-[#dfe4ec] bg-[#fafbfc] px-4 py-3 text-sm text-[#172b4d] outline-none placeholder:text-[#a0a9b8] focus:border-[#d97896] focus:ring-2 focus:ring-[#d97896]/10"
-                />
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9aa5b7]" />
+                  <input value={mealName} onChange={(event) => handleMealInputChange(event.target.value)} placeholder="Example: Paneer dosa or dal khichdi" className="w-full rounded-xl border border-[#dfe4ec] bg-[#fafbfc] px-10 py-3 text-sm text-[#172b4d] outline-none placeholder:text-[#a0a9b8] focus:border-[#d97896] focus:ring-2 focus:ring-[#d97896]/10" />
+                </div>
+                {mealSuggestions.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {mealSuggestions.map((item) => (
+                      <button key={item} type="button" onClick={() => setMealName(item)} className="rounded-full border border-[#f1bfd0] bg-[#fff9fb] px-3 py-1.5 text-xs font-medium text-[#b94f6d] hover:bg-[#fbeaf0]">
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* NUTRITION INPUTS */}
-              <div className="grid grid-cols-2 gap-3">
+              {analysisText && (
+                <div className="rounded-2xl border border-[#f3dfe6] bg-[#fffafc] p-3 text-xs leading-6 text-[#5d6777]">
+                  {analysisText}
+                </div>
+              )}
 
-                <NutritionInput
-                  label="Calories"
-                  value={mealCalories}
-                  onChange={setMealCalories}
-                  placeholder="450"
-                />
-
-                <NutritionInput
-                  label="Protein (g)"
-                  value={mealProtein}
-                  onChange={setMealProtein}
-                  placeholder="20"
-                />
-
-                <NutritionInput
-                  label="Carbs (g)"
-                  value={mealCarbs}
-                  onChange={setMealCarbs}
-                  placeholder="50"
-                />
-
-                <NutritionInput
-                  label="Fat (g)"
-                  value={mealFat}
-                  onChange={setMealFat}
-                  placeholder="12"
-                />
-
-              </div>
-
-              <button
-                type="button"
-                onClick={addMeal}
-                disabled={!mealName.trim()}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#172b4d] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#243e66] disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <button type="button" onClick={addMeal} disabled={!mealName.trim() || isAnalyzing} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#172b4d] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#243e66] disabled:cursor-not-allowed disabled:opacity-40">
                 <CheckCircle2 className="h-4 w-4" />
-                Save meal
+                {isAnalyzing ? "Analyzing meal..." : "Save meal"}
               </button>
-
             </div>
           </div>
         </div>
@@ -601,141 +452,47 @@ export default function NutritionPage() {
   );
 }
 
-/* NUTRITION CARD */
-
-function NutritionCard({
-  icon,
-  label,
-  value,
-  target,
-  progress,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  target: string;
-  progress: number;
-  accent: "rose" | "navy";
-}) {
-  const iconClass =
-    accent === "rose"
-      ? "bg-[#fbeaf0] text-[#c95d7d]"
-      : "bg-[#edf2fa] text-[#29476f]";
-
-  const progressClass =
-    accent === "rose"
-      ? "bg-[#d97896]"
-      : "bg-[#29476f]";
+function NutritionCard({ icon, label, value, target, progress, accent }: { icon: React.ReactNode; label: string; value: string; target: string; progress: number; accent: "rose" | "navy"; }) {
+  const iconClass = accent === "rose" ? "bg-[#fbeaf0] text-[#c95d7d]" : "bg-[#edf2fa] text-[#29476f]";
+  const progressClass = accent === "rose" ? "bg-[#d97896]" : "bg-[#29476f]";
 
   return (
     <div className="rounded-[22px] border border-[#e3e7ee] bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between">
-
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${iconClass}`}>
           {icon}
         </div>
-
-        <span className="text-xs font-medium text-[#8994a8]">
-          Today
-        </span>
+        <span className="text-xs font-medium text-[#8994a8]">Today</span>
       </div>
 
-      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-[#8490a4]">
-        {label}
-      </p>
+      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-[#8490a4]">{label}</p>
 
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-2xl font-semibold text-[#172b4d]">
-          {value}
-        </span>
-
-        <span className="text-xs text-[#8b96a9]">
-          / {target}
-        </span>
+        <span className="text-2xl font-semibold text-[#172b4d]">{value}</span>
+        <span className="text-xs text-[#8b96a9]">/ {target}</span>
       </div>
 
       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#edf0f4]">
-        <div
-          className={`h-full rounded-full ${progressClass}`}
-          style={{
-            width: `${progress}%`,
-          }}
-        />
+        <div className={`h-full rounded-full ${progressClass}`} style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
 }
 
-/* SMALL INFO CARD */
-
-function SmallInfoCard({
-  title,
-  value,
-  subtitle,
-  icon,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ReactNode;
-}) {
+function SmallInfoCard({ title, value, subtitle, icon }: { title: string; value: string; subtitle: string; icon: React.ReactNode; }) {
   return (
     <div className="flex items-center gap-4 rounded-[20px] border border-[#e3e7ee] bg-white p-5 shadow-sm">
-
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#edf2fa] text-[#29476f]">
         {icon}
       </div>
-
       <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#8994a8]">
-          {title}
-        </p>
-
-        <p className="mt-1 truncate text-lg font-semibold text-[#172b4d]">
-          {value}
-        </p>
-
-        <p className="truncate text-xs text-[#8a96aa]">
-          {subtitle}
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#8994a8]">{title}</p>
+        <p className="mt-1 truncate text-lg font-semibold text-[#172b4d]">{value}</p>
+        <p className="truncate text-xs text-[#8a96aa]">{subtitle}</p>
       </div>
     </div>
   );
 }
-
-/* INPUT */
-
-function NutritionInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-xs font-semibold text-[#718099]">
-        {label}
-      </label>
-
-      <input
-        type="number"
-        min="0"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-[#dfe4ec] bg-[#fafbfc] px-3 py-3 text-sm text-[#172b4d] outline-none placeholder:text-[#a0a9b8] focus:border-[#d97896] focus:ring-2 focus:ring-[#d97896]/10"
-      />
-    </div>
-  );
-}
-
-/* SAFETY ICON */
 
 function ShieldIcon() {
   return (
